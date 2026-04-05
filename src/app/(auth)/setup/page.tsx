@@ -4,6 +4,27 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/infrastructure/supabase/client';
 
+function formatCNPJ(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 14);
+  return digits
+    .replace(/^(\d{2})(\d)/, '$1.$2')
+    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1/$2')
+    .replace(/(\d{4})(\d)/, '$1-$2');
+}
+
+function formatPhone(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 10) {
+    return digits
+      .replace(/^(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{4})(\d)/, '$1-$2');
+  }
+  return digits
+    .replace(/^(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d)/, '$1-$2');
+}
+
 export default function SetupPage() {
   const router = useRouter();
   const [pharmacyName, setPharmacyName] = useState('');
@@ -118,9 +139,10 @@ export default function SetupPage() {
                 id="pharmacyCnpj"
                 type="text"
                 value={pharmacyCnpj}
-                onChange={(e) => setPharmacyCnpj(e.target.value)}
+                onChange={(e) => setPharmacyCnpj(formatCNPJ(e.target.value))}
                 className="input-ios"
                 placeholder="00.000.000/0000-00"
+                maxLength={18}
                 aria-label="CNPJ da farmacia"
               />
             </div>
@@ -133,9 +155,10 @@ export default function SetupPage() {
                 id="pharmacyPhone"
                 type="tel"
                 value={pharmacyPhone}
-                onChange={(e) => setPharmacyPhone(e.target.value)}
+                onChange={(e) => setPharmacyPhone(formatPhone(e.target.value))}
                 className="input-ios"
                 placeholder="(11) 99999-9999"
+                maxLength={15}
                 aria-label="Telefone da farmacia"
               />
             </div>

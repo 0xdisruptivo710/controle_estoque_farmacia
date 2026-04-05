@@ -1,84 +1,144 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, createServiceRoleClient } from '@/infrastructure/supabase/server';
 
+function isValidCNPJ(cnpj: string): boolean {
+  const digits = cnpj.replace(/\D/g, '');
+  if (digits.length !== 14) return false;
+  if (/^(\d)\1+$/.test(digits)) return false;
+
+  const calc = (slice: string, weights: number[]) =>
+    weights.reduce((sum, w, i) => sum + parseInt(slice[i]) * w, 0);
+
+  const w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+
+  const d1 = calc(digits, w1) % 11;
+  const check1 = d1 < 2 ? 0 : 11 - d1;
+  if (parseInt(digits[12]) !== check1) return false;
+
+  const d2 = calc(digits, w2) % 11;
+  const check2 = d2 < 2 ? 0 : 11 - d2;
+  if (parseInt(digits[13]) !== check2) return false;
+
+  return true;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError) {
-      console.error('[setup] Auth error:', authError.message);
       return NextResponse.json({ error: `Auth: ${authError.message}` }, { status: 401 });
     }
-
     if (!user) {
-      console.error('[setup] No user found');
       return NextResponse.json({ error: 'Nao autenticado. Faca login novamente.' }, { status: 401 });
     }
-
-    console.log('[setup] User:', user.id, user.email);
 
     const body = await request.json();
     const { pharmacyName, pharmacyCnpj, pharmacyPhone, pharmacyEmail } = body;
 
-    const admin = createServiceRoleClient();
+    if (!pharmacyName?.trim()) {
+      return NextResponse.json({ error: 'Nome da farmacia e obrigatorio.' }, { status: 400 });
+    }
 
-    // Check if user already has a profile
-    const { data: existingProfile, error: profileCheckError } = await admin
+    // Validate CNPJ format if provided
+    if (pharmacyCnpj?.trim() && !isValidCNPJ(pharmacyCnpj)) {
+      return NextResponse.json({ error: 'CNPJ invalido. Verifique os digitos.' }, { status: 400 });
+    }
+
+    const admin = createServiceRoleClient();
+    const cleanCnpj = pharmacyCnpj?.replace(/\D/g, '') || null;
+
+    // 1. Check if user already has a profile with pharmacy
+    const { data: existingProfile } = await admin
       .from('profiles')
       .select('id, pharmacy_id')
       .eq('id', user.id)
       .maybeSingle();
 
-    if (profileCheckError) {
-      console.error('[setup] Profile check error:', profileCheckError.message);
-    }
-
     if (existingProfile?.pharmacy_id) {
-      console.log('[setup] Profile already exists:', existingProfile.pharmacy_id);
-      return NextResponse.json({ pharmacyId: existingProfile.pharmacy_id });
+      return NextResponse.json({ pharmacyId: existingProfile.pharmacy_id, success: true });
     }
 
-    // Create pharmacy
+    // 2. Check CNPJ uniqueness if provided
+    if (cleanCnpj) {
+      const { data: existingPharmacy } = await admin
+        .from('pharmacies')
+        .select('id')
+        .eq('cnpj', cleanCnpj)
+        .maybeSingle();
+
+      if (existingPharmacy) {
+        return NextResponse.json({ error: 'Ja existe uma farmacia cadastrada com este CNPJ.' }, { status: 409 });
+      }
+    }
+
+    // 3. Check email uniqueness if provided
+    const emailToUse = pharmacyEmail?.trim() || user.email;
+    if (emailToUse) {
+      const { data: existingEmail } = await admin
+        .from('pharmacies')
+        .select('id')
+        .eq('email', emailToUse)
+        .maybeSingle();
+
+      if (existingEmail) {
+        return NextResponse.json({ error: 'Ja existe uma farmacia cadastrada com este e-mail.' }, { status: 409 });
+      }
+    }
+
+    // 4. Create pharmacy
     const { data: pharmacy, error: pharmacyError } = await admin
       .from('pharmacies')
       .insert({
-        name: pharmacyName || 'Minha Farmacia',
-        cnpj: pharmacyCnpj || null,
-        phone: pharmacyPhone || null,
-        email: pharmacyEmail || user.email,
+        name: pharmacyName.trim(),
+        cnpj: cleanCnpj,
+        phone: pharmacyPhone?.trim() || null,
+        email: emailToUse,
       })
       .select()
       .single();
 
     if (pharmacyError) {
       console.error('[setup] Pharmacy creation error:', pharmacyError);
-      return NextResponse.json({ error: `Farmacia: ${pharmacyError.message}` }, { status: 500 });
+      return NextResponse.json({ error: 'Erro ao criar farmacia. Tente novamente.' }, { status: 500 });
     }
 
-    console.log('[setup] Pharmacy created:', pharmacy.id);
-
-    // Create profile linked to pharmacy
-    const { error: profileError } = await admin
+    // 5. Link profile to pharmacy (UPDATE if exists, INSERT if not)
+    const { data: updated } = await admin
       .from('profiles')
-      .insert({
-        id: user.id,
+      .update({
         pharmacy_id: pharmacy.id,
         full_name: user.user_metadata?.full_name || 'Administrador',
         role: 'admin',
-        phone: pharmacyPhone || null,
-      });
+      })
+      .eq('id', user.id)
+      .select('id')
+      .maybeSingle();
 
-    if (profileError) {
-      console.error('[setup] Profile creation error:', profileError);
-      return NextResponse.json({ error: `Perfil: ${profileError.message}` }, { status: 500 });
+    if (!updated) {
+      const { error: insertError } = await admin
+        .from('profiles')
+        .insert({
+          id: user.id,
+          pharmacy_id: pharmacy.id,
+          full_name: user.user_metadata?.full_name || 'Administrador',
+          role: 'admin',
+        });
+
+      if (insertError) {
+        console.error('[setup] Profile insert error:', insertError);
+        // Rollback: remove orphan pharmacy
+        await admin.from('pharmacies').delete().eq('id', pharmacy.id);
+        return NextResponse.json({ error: 'Erro ao criar perfil. Tente novamente.' }, { status: 500 });
+      }
     }
 
-    console.log('[setup] Profile created for user:', user.id);
+    console.log('[setup] Setup complete — user:', user.id, 'pharmacy:', pharmacy.id);
     return NextResponse.json({ pharmacyId: pharmacy.id, success: true });
   } catch (error) {
     console.error('[setup] Unexpected error:', error);
-    const message = error instanceof Error ? error.message : 'Erro interno';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Erro interno. Tente novamente.' }, { status: 500 });
   }
 }
