@@ -50,6 +50,7 @@ export default function SetupPage() {
         .maybeSingle();
 
       if (profile?.pharmacy_id) {
+        document.cookie = 'pc_has_pharmacy=1; path=/; max-age=2592000; SameSite=Lax';
         window.location.href = '/';
         return;
       }
@@ -79,7 +80,8 @@ export default function SetupPage() {
         return;
       }
 
-      // Success — full reload to let middleware set fresh session cookies
+      // Set cookie so middleware skips profile DB query on redirect
+      document.cookie = 'pc_has_pharmacy=1; path=/; max-age=2592000; SameSite=Lax';
       window.location.href = '/';
     } catch (err) {
       setError(`Erro de rede: ${err instanceof Error ? err.message : 'tente novamente.'}`);

@@ -1,6 +1,9 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+const PHARMACY_COOKIE = 'pc_has_pharmacy';
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+
 export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -57,7 +60,10 @@ export async function middleware(request: NextRequest) {
 
     // Not authenticated → login (except auth pages and API routes)
     if (!user && !isAuthPage && !isApiRoute) {
-      return redirect('/login');
+      // Clear pharmacy cookie on logout
+      const response = redirect('/login');
+      response.cookies.delete(PHARMACY_COOKIE);
+      return response;
     }
 
     // Authenticated on auth page → dashboard
@@ -67,15 +73,36 @@ export async function middleware(request: NextRequest) {
 
     // Authenticated, not on setup/auth/api → verify profile exists
     if (user && !isAuthPage && !isSetupPage && !isApiRoute) {
-      const { data: profile } = await supabase
+      // Fast path: cookie set after successful setup — skip DB query
+      const hasPharmacyCookie = request.cookies.get(PHARMACY_COOKIE);
+      if (hasPharmacyCookie) {
+        return supabaseResponse;
+      }
+
+      // Slow path: query DB to check profile
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('id, pharmacy_id')
         .eq('id', user.id)
         .maybeSingle();
 
+      // If DB query fails, fail open — let the page handle it
+      if (profileError) {
+        console.error('[middleware] Profile check failed:', profileError.message);
+        return supabaseResponse;
+      }
+
       if (!profile || !profile.pharmacy_id) {
         return redirect('/setup');
       }
+
+      // Profile found — cache in cookie to skip this check next time
+      supabaseResponse.cookies.set(PHARMACY_COOKIE, '1', {
+        path: '/',
+        maxAge: COOKIE_MAX_AGE,
+        sameSite: 'lax',
+        httpOnly: true,
+      });
     }
 
     return supabaseResponse;

@@ -136,6 +136,8 @@ export default function DashboardLayout({
     const supabase = createClient();
     await supabase.auth.signOut();
     setUser(null);
+    // Clear pharmacy cookie so middleware re-checks on next login
+    document.cookie = 'pc_has_pharmacy=; path=/; max-age=0';
     router.push('/login');
     router.refresh();
   }
