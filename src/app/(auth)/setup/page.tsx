@@ -37,11 +37,23 @@ export default function SetupPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) {
         router.push('/login');
         return;
       }
+      // If user already has a profile with pharmacy, skip setup
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('pharmacy_id')
+        .eq('id', data.user.id)
+        .maybeSingle();
+
+      if (profile?.pharmacy_id) {
+        window.location.href = '/';
+        return;
+      }
+
       setUserEmail(data.user.email ?? '');
       setPharmacyEmail(data.user.email ?? '');
     });
@@ -67,8 +79,8 @@ export default function SetupPage() {
         return;
       }
 
-      // Success - redirect to dashboard
-      window.location.href = '/customers';
+      // Success — full reload to let middleware set fresh session cookies
+      window.location.href = '/';
     } catch (err) {
       setError(`Erro de rede: ${err instanceof Error ? err.message : 'tente novamente.'}`);
     } finally {

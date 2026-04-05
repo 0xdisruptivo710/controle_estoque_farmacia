@@ -92,36 +92,40 @@ export default function DashboardLayout({
 
     async function loadProfile() {
       setAuthLoading(true);
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
 
-      if (!authUser) {
-        setUser(null);
-        return;
-      }
+        if (!authUser) {
+          setUser(null);
+          return;
+        }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id, pharmacy_id, full_name, role, avatar_url')
-        .eq('id', authUser.id)
-        .single();
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, pharmacy_id, full_name, role, avatar_url')
+          .eq('id', authUser.id)
+          .maybeSingle();
 
-      if (profile) {
-        setUser({
-          id: profile.id,
-          pharmacyId: profile.pharmacy_id,
-          fullName: profile.full_name,
-          role: profile.role,
-          email: authUser.email ?? '',
-          avatarUrl: profile.avatar_url ?? undefined,
-        });
-      } else {
-        setUser({
-          id: authUser.id,
-          pharmacyId: '',
-          fullName: authUser.user_metadata?.full_name ?? 'Usuario',
-          role: 'attendant',
-          email: authUser.email ?? '',
-        });
+        if (profile) {
+          setUser({
+            id: profile.id,
+            pharmacyId: profile.pharmacy_id,
+            fullName: profile.full_name,
+            role: profile.role,
+            email: authUser.email ?? '',
+            avatarUrl: profile.avatar_url ?? undefined,
+          });
+        } else {
+          setUser({
+            id: authUser.id,
+            pharmacyId: '',
+            fullName: authUser.user_metadata?.full_name ?? 'Usuario',
+            role: 'attendant',
+            email: authUser.email ?? '',
+          });
+        }
+      } finally {
+        setAuthLoading(false);
       }
     }
 

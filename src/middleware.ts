@@ -5,7 +5,6 @@ export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // If env vars are missing, let the request pass through
   if (!supabaseUrl || !supabaseKey) {
     return NextResponse.next();
   }
@@ -30,6 +29,7 @@ export async function middleware(request: NextRequest) {
       },
     });
 
+    // getUser() refreshes the session — cookies may be updated here
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -44,38 +44,42 @@ export async function middleware(request: NextRequest) {
     const isSetupPage = pathname.startsWith('/setup');
     const isApiRoute = pathname.startsWith('/api');
 
-    // Not authenticated -> redirect to login
+    // Redirect helper — copies refreshed session cookies to the redirect response
+    function redirect(path: string) {
+      const url = request.nextUrl.clone();
+      url.pathname = path;
+      const response = NextResponse.redirect(url);
+      supabaseResponse.cookies.getAll().forEach((cookie) => {
+        response.cookies.set(cookie.name, cookie.value);
+      });
+      return response;
+    }
+
+    // Not authenticated → login (except auth pages and API routes)
     if (!user && !isAuthPage && !isApiRoute) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/login';
-      return NextResponse.redirect(url);
+      return redirect('/login');
     }
 
-    // Authenticated on auth page -> go to dashboard
+    // Authenticated on auth page → dashboard
     if (user && isAuthPage) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/';
-      return NextResponse.redirect(url);
+      return redirect('/');
     }
 
-    // Authenticated, not on setup/auth/api -> check profile exists
+    // Authenticated, not on setup/auth/api → verify profile exists
     if (user && !isAuthPage && !isSetupPage && !isApiRoute) {
       const { data: profile } = await supabase
         .from('profiles')
         .select('id, pharmacy_id')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
       if (!profile || !profile.pharmacy_id) {
-        const url = request.nextUrl.clone();
-        url.pathname = '/setup';
-        return NextResponse.redirect(url);
+        return redirect('/setup');
       }
     }
 
     return supabaseResponse;
   } catch {
-    // If middleware fails, let the request pass through
     return NextResponse.next();
   }
 }
