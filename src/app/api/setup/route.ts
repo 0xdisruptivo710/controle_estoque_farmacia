@@ -105,34 +105,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Erro ao criar farmacia. Tente novamente.' }, { status: 500 });
     }
 
-    // 5. Link profile to pharmacy (UPDATE if exists, INSERT if not)
-    const { data: updated } = await admin
+    // 5. Link profile to pharmacy (atomic upsert — INSERT or UPDATE in one op)
+    const { error: profileError } = await admin
       .from('profiles')
-      .update({
+      .upsert({
+        id: user.id,
         pharmacy_id: pharmacy.id,
         full_name: user.user_metadata?.full_name || 'Administrador',
         role: 'admin',
-      })
-      .eq('id', user.id)
-      .select('id')
-      .maybeSingle();
+      }, { onConflict: 'id' });
 
-    if (!updated) {
-      const { error: insertError } = await admin
-        .from('profiles')
-        .insert({
-          id: user.id,
-          pharmacy_id: pharmacy.id,
-          full_name: user.user_metadata?.full_name || 'Administrador',
-          role: 'admin',
-        });
-
-      if (insertError) {
-        console.error('[setup] Profile insert error:', insertError);
-        // Rollback: remove orphan pharmacy
-        await admin.from('pharmacies').delete().eq('id', pharmacy.id);
-        return NextResponse.json({ error: 'Erro ao criar perfil. Tente novamente.' }, { status: 500 });
-      }
+    if (profileError) {
+      console.error('[setup] Profile upsert error:', profileError);
+      // Rollback: remove orphan pharmacy
+      await admin.from('pharmacies').delete().eq('id', pharmacy.id);
+      return NextResponse.json({ error: 'Erro ao criar perfil. Tente novamente.' }, { status: 500 });
     }
 
     console.log('[setup] Setup complete — user:', user.id, 'pharmacy:', pharmacy.id);
