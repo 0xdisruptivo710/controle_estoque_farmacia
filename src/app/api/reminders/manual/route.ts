@@ -1,19 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/infrastructure/supabase/server';
+import { getAuthenticatedProfile } from '@/infrastructure/supabase/auth-helpers';
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('pharmacy_id')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    const { user, profile, supabase, error: authErr } = await getAuthenticatedProfile();
+    if (authErr === 'Unauthorized') return NextResponse.json({ error: authErr }, { status: 401 });
+    if (!profile || !user) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
     const body = await request.json();
     const { customerId, productId, scheduledDate, channel, customMessage, isRecurring, recurringDays } = body;

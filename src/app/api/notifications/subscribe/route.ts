@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/infrastructure/supabase/server';
+import { createServiceRoleClient } from '@/infrastructure/supabase/server';
+import { getAuthenticatedProfile } from '@/infrastructure/supabase/auth-helpers';
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user, error: authErr } = await getAuthenticatedProfile();
+    if (authErr === 'Unauthorized' || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { endpoint, keys } = await request.json();
 
-    const { error } = await supabase
+    const admin = createServiceRoleClient();
+    const { error } = await admin
       .from('profiles')
       .update({
         push_endpoint: endpoint,

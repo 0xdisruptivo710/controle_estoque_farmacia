@@ -1,18 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@/infrastructure/supabase/server';
+import { getAuthenticatedProfile } from '@/infrastructure/supabase/auth-helpers';
 
 export async function GET() {
   try {
-    const supabase = await createServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('pharmacy_id')
-      .eq('id', user.id)
-      .single();
-
+    const { profile, supabase, error } = await getAuthenticatedProfile();
+    if (error === 'Unauthorized') return NextResponse.json({ error }, { status: 401 });
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
     const pharmacyId = profile.pharmacy_id;
