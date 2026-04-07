@@ -1,30 +1,42 @@
+const DEFAULT_API_URL = 'https://api.wts.chat/v1';
+
+interface FlwChatConfig {
+  apiUrl?: string;
+  apiToken: string;
+  fromPhone?: string | null;
+}
+
 export class FlwChatWhatsAppService {
   private readonly apiUrl: string;
   private readonly apiToken: string;
-
-  constructor() {
-    this.apiUrl = (
-      process.env.FLWCHAT_API_URL ?? 'https://api.flw.chat/v1'
-    ).replace(/\/+$/, '');
-    this.apiToken = process.env.FLWCHAT_API_TOKEN ?? '';
-  }
+  private readonly fromPhone: string | null;
 
   /**
-   * Formata o numero de telefone para o padrao FlwChat (somente digitos, com DDI 55).
+   * Accepts config directly (from pharmacy settings) or falls back to env vars.
    */
+  constructor(config?: FlwChatConfig) {
+    this.apiUrl = (
+      config?.apiUrl ?? process.env.FLWCHAT_API_URL ?? DEFAULT_API_URL
+    ).replace(/\/+$/, '');
+    this.apiToken = config?.apiToken ?? process.env.FLWCHAT_API_TOKEN ?? '';
+    this.fromPhone = config?.fromPhone ?? null;
+  }
+
   private formatPhone(phone: string): string {
     const digits = phone.replace(/\D/g, '');
     return digits.startsWith('55') ? digits : `55${digits}`;
   }
 
   /**
-   * Envia mensagem de texto via WhatsApp usando a API FlwChat.
+   * Envia mensagem de texto via WhatsApp usando a API WTS/Aios.
+   * O campo `from` usa o numero configurado na farmacia.
    */
   async sendWhatsApp(
     to: string,
     message: string,
   ): Promise<{ providerId: string }> {
-    const formattedPhone = this.formatPhone(to);
+    const formattedTo = this.formatPhone(to);
+    const from = this.fromPhone ? this.formatPhone(this.fromPhone) : null;
 
     const response = await fetch(`${this.apiUrl}/message/send`, {
       method: 'POST',
@@ -33,8 +45,8 @@ export class FlwChatWhatsAppService {
         Authorization: `Bearer ${this.apiToken}`,
       },
       body: JSON.stringify({
-        from: null,
-        to: formattedPhone,
+        from,
+        to: formattedTo,
         body: { text: message },
         options: {},
       }),
@@ -43,7 +55,7 @@ export class FlwChatWhatsAppService {
     if (!response.ok) {
       const errorBody = await response.text();
       throw new Error(
-        `FlwChat: falha ao enviar WhatsApp para ${formattedPhone} — HTTP ${response.status}: ${errorBody}`,
+        `WTS: falha ao enviar WhatsApp para ${formattedTo} — HTTP ${response.status}: ${errorBody}`,
       );
     }
 
@@ -51,9 +63,6 @@ export class FlwChatWhatsAppService {
     return { providerId: data.id ?? data.messageId ?? '' };
   }
 
-  /**
-   * Consulta o status de uma mensagem enviada.
-   */
   async getMessageStatus(
     messageId: string,
   ): Promise<{ status: string }> {
@@ -61,16 +70,14 @@ export class FlwChatWhatsAppService {
       `${this.apiUrl}/message/${messageId}/status`,
       {
         method: 'GET',
-        headers: {
-          Authorization: `Bearer ${this.apiToken}`,
-        },
+        headers: { Authorization: `Bearer ${this.apiToken}` },
       },
     );
 
     if (!response.ok) {
       const errorBody = await response.text();
       throw new Error(
-        `FlwChat: falha ao consultar status da mensagem ${messageId} — HTTP ${response.status}: ${errorBody}`,
+        `WTS: falha ao consultar status — HTTP ${response.status}: ${errorBody}`,
       );
     }
 
@@ -78,22 +85,16 @@ export class FlwChatWhatsAppService {
     return { status: data.status ?? 'unknown' };
   }
 
-  /**
-   * Lista os templates disponiveis na conta FlwChat.
-   * Retorno tipado como array generico para uso futuro.
-   */
   async listTemplates(): Promise<Array<Record<string, unknown>>> {
     const response = await fetch(`${this.apiUrl}/template`, {
       method: 'GET',
-      headers: {
-        Authorization: `Bearer ${this.apiToken}`,
-      },
+      headers: { Authorization: `Bearer ${this.apiToken}` },
     });
 
     if (!response.ok) {
       const errorBody = await response.text();
       throw new Error(
-        `FlwChat: falha ao listar templates — HTTP ${response.status}: ${errorBody}`,
+        `WTS: falha ao listar templates — HTTP ${response.status}: ${errorBody}`,
       );
     }
 

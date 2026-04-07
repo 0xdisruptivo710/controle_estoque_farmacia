@@ -22,7 +22,7 @@ const testSchema = z.object({
 // Helpers
 // ---------------------------------------------------------------------------
 
-const FLWCHAT_BASE_URL = 'https://api.flw.chat/v1';
+const FLWCHAT_BASE_URL = 'https://api.wts.chat/v1';
 
 function maskToken(token: string): string {
   if (!token || token.length < 8) return '***';
@@ -163,8 +163,8 @@ export async function POST(request: NextRequest) {
 
     const { apiToken } = parsed.data;
 
-    // Call FlwChat API to list channels
-    const response = await fetch(`${FLWCHAT_BASE_URL}/channel`, {
+    // Call WTS/Aios API to list WhatsApp channels
+    const response = await fetch(`${FLWCHAT_BASE_URL}/channel?ChannelType=Whatsapp`, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${apiToken}`,

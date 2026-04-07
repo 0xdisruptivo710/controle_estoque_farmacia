@@ -16,21 +16,52 @@ export async function GET(request: NextRequest) {
 
   try {
     const supabase = createServiceRoleClient();
-    const whatsapp = new FlwChatWhatsAppService();
-    const push = new WebPushService();
 
-    const notificationService = {
-      sendWhatsApp: (to: string, message: string) => whatsapp.sendWhatsApp(to, message),
-      sendPush: (endpoint: string, payload: string) => push.sendPush(endpoint, payload),
-    };
+    // Read FlwChat config from all active pharmacies and send reminders per pharmacy
+    const { data: pharmacies } = await supabase
+      .from('pharmacies')
+      .select('id, settings')
+      .eq('is_active', true)
+      .is('deleted_at', null);
 
-    const useCase = new SendPendingRemindersUseCase(
-      new SupabaseReminderRepository(supabase),
-      notificationService,
-    );
+    let totalSent = 0;
+    let totalFailed = 0;
+    let totalCount = 0;
 
-    const result = await useCase.execute({ date: new Date() });
-    return NextResponse.json({ success: true, ...result });
+    for (const pharmacy of pharmacies ?? []) {
+      const settings = (pharmacy.settings ?? {}) as Record<string, unknown>;
+      const flwchat = (settings.flwchat ?? {}) as Record<string, unknown>;
+      const apiToken = flwchat.apiToken as string | undefined;
+      const fromPhone = flwchat.phoneNumber as string | undefined;
+
+      if (!apiToken) continue; // Skip pharmacies without FlwChat configured
+
+      const whatsapp = new FlwChatWhatsAppService({
+        apiToken,
+        fromPhone: fromPhone ?? null,
+      });
+      const push = new WebPushService();
+
+      const notificationService = {
+        sendWhatsApp: (to: string, message: string) => whatsapp.sendWhatsApp(to, message),
+        sendPush: (endpoint: string, payload: string) => push.sendPush(endpoint, payload),
+      };
+
+      const repo = new SupabaseReminderRepository(supabase);
+      const useCase = new SendPendingRemindersUseCase(repo, notificationService);
+      const result = await useCase.execute({ date: new Date() });
+
+      totalCount += result.count;
+      totalSent += result.sent;
+      totalFailed += result.failed;
+    }
+
+    return NextResponse.json({
+      success: true,
+      count: totalCount,
+      sent: totalSent,
+      failed: totalFailed,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno';
     return NextResponse.json({ error: message }, { status: 500 });
