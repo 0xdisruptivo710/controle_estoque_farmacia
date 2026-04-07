@@ -10,20 +10,26 @@ export async function getAuthenticatedProfile() {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
 
   if (authError || !user) {
-    return { user: null, profile: null, supabase, error: 'Unauthorized' as const };
+    return { user: null, profile: null, supabase, admin: createServiceRoleClient(), error: 'Unauthorized' as const };
   }
 
-  // Use service role to bypass RLS for internal profile lookup
+  // Use service role for ALL database operations to bypass RLS issues
   const admin = createServiceRoleClient();
-  const { data: profile } = await admin
+  const { data: profile, error: profileError } = await admin
     .from('profiles')
     .select('id, pharmacy_id, full_name, role')
     .eq('id', user.id)
     .maybeSingle();
 
-  if (!profile || !profile.pharmacy_id) {
-    return { user, profile: null, supabase, error: 'Profile not found' as const };
+  if (profileError) {
+    console.error('[auth-helpers] Profile query error:', profileError.message);
+    return { user, profile: null, supabase, admin, error: 'Profile not found' as const };
   }
 
-  return { user, profile, supabase, error: null };
+  if (!profile || !profile.pharmacy_id) {
+    console.error('[auth-helpers] Profile missing for user:', user.id, '| profile:', profile);
+    return { user, profile: null, supabase, admin, error: 'Profile not found' as const };
+  }
+
+  return { user, profile, supabase, admin, error: null };
 }

@@ -3,14 +3,14 @@ import { getAuthenticatedProfile } from '@/infrastructure/supabase/auth-helpers'
 
 export async function POST(request: NextRequest) {
   try {
-    const { user, profile, supabase, error: authErr } = await getAuthenticatedProfile();
+    const { user, profile, admin, error: authErr } = await getAuthenticatedProfile();
     if (authErr === 'Unauthorized') return NextResponse.json({ error: authErr }, { status: 401 });
     if (!profile || !user) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
     const body = await request.json();
 
     // Create stock item (lot)
-    const { data: stockItem, error: itemError } = await supabase
+    const { data: stockItem, error: itemError } = await admin
       .from('stock_items')
       .insert({
         pharmacy_id: profile.pharmacy_id,
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     if (itemError) return NextResponse.json({ error: itemError.message }, { status: 500 });
 
     // Register the entry movement
-    const { error: movError } = await supabase
+    const { error: movError } = await admin
       .from('stock_movements')
       .insert({
         pharmacy_id: profile.pharmacy_id,
@@ -57,12 +57,12 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const { supabase, error: authErr } = await getAuthenticatedProfile();
+    const { admin, error: authErr } = await getAuthenticatedProfile();
     if (authErr === 'Unauthorized') return NextResponse.json({ error: authErr }, { status: 401 });
 
     const productId = request.nextUrl.searchParams.get('productId');
 
-    let query = supabase
+    let query = admin
       .from('stock_items')
       .select('*, products(name, unit_of_measure, minimum_stock)')
       .is('deleted_at', null)

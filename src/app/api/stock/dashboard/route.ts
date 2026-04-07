@@ -3,14 +3,14 @@ import { getAuthenticatedProfile } from '@/infrastructure/supabase/auth-helpers'
 
 export async function GET() {
   try {
-    const { profile, supabase, error } = await getAuthenticatedProfile();
+    const { profile, admin, error } = await getAuthenticatedProfile();
     if (error === 'Unauthorized') return NextResponse.json({ error }, { status: 401 });
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
     const pharmacyId = profile.pharmacy_id;
 
-    // Get all products for this pharmacy
-    const { data: products, error: prodError } = await supabase
+    // Use admin (service role) to bypass RLS
+    const { data: products, error: prodError } = await admin
       .from('products')
       .select('id, name, unit_of_measure, minimum_stock, maximum_stock, category')
       .eq('pharmacy_id', pharmacyId)
@@ -19,8 +19,7 @@ export async function GET() {
 
     if (prodError) return NextResponse.json({ error: prodError.message }, { status: 500 });
 
-    // Get all stock items for this pharmacy
-    const { data: stockItems, error: stockError } = await supabase
+    const { data: stockItems, error: stockError } = await admin
       .from('stock_items')
       .select('id, product_id, quantity, expiration_date, alert_level')
       .eq('pharmacy_id', pharmacyId)

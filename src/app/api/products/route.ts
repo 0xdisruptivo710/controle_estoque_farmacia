@@ -4,11 +4,11 @@ import { SupabaseProductRepository } from '@/infrastructure/repositories/Supabas
 
 export async function GET(request: NextRequest) {
   try {
-    const { profile, supabase, error } = await getAuthenticatedProfile();
+    const { profile, admin, error } = await getAuthenticatedProfile();
     if (error === 'Unauthorized') return NextResponse.json({ error }, { status: 401 });
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
-    const repo = new SupabaseProductRepository(supabase);
+    const repo = new SupabaseProductRepository(admin);
     const { searchParams } = request.nextUrl;
     const search = searchParams.get('search') ?? undefined;
     const category = searchParams.get('category') ?? undefined;
@@ -32,13 +32,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user, profile, supabase, error: authErr } = await getAuthenticatedProfile();
+    const { user, profile, admin, error: authErr } = await getAuthenticatedProfile();
     if (authErr === 'Unauthorized') return NextResponse.json({ error: authErr }, { status: 401 });
     if (!profile || !user) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
     const body = await request.json();
 
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from('products')
       .insert({
         pharmacy_id: profile.pharmacy_id,

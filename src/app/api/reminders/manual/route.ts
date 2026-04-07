@@ -3,7 +3,7 @@ import { getAuthenticatedProfile } from '@/infrastructure/supabase/auth-helpers'
 
 export async function POST(request: NextRequest) {
   try {
-    const { user, profile, supabase, error: authErr } = await getAuthenticatedProfile();
+    const { user, profile, admin, error: authErr } = await getAuthenticatedProfile();
     if (authErr === 'Unauthorized') return NextResponse.json({ error: authErr }, { status: 401 });
     if (!profile || !user) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
 
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Cliente e data sao obrigatorios.' }, { status: 400 });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from('repurchase_reminders')
       .insert({
         pharmacy_id: profile.pharmacy_id,
