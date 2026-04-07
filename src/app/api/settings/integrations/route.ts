@@ -11,6 +11,7 @@ const putSchema = z.object({
   apiToken: z.string().min(1, 'Token obrigatorio'),
   channelId: z.string().optional(),
   channelName: z.string().optional(),
+  phoneNumber: z.string().optional(),
 });
 
 const testSchema = z.object({
@@ -64,6 +65,7 @@ export async function GET() {
         apiToken: flwchat.apiToken ? maskToken(flwchat.apiToken as string) : null,
         channelId: (flwchat.channelId as string) ?? null,
         channelName: (flwchat.channelName as string) ?? null,
+        phoneNumber: (flwchat.phoneNumber as string) ?? null,
         connected: Boolean(flwchat.apiToken && flwchat.channelId),
       },
     });
@@ -84,21 +86,13 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Only admins can change integration settings
-    if (profile.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Apenas administradores podem alterar integracoes' },
-        { status: 403 },
-      );
-    }
-
     const body = await request.json();
     const parsed = putSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
 
-    const { apiToken, channelId, channelName } = parsed.data;
+    const { apiToken, channelId, channelName, phoneNumber } = parsed.data;
 
     const admin = createServiceRoleClient();
 
@@ -117,6 +111,7 @@ export async function PUT(request: NextRequest) {
         apiToken,
         channelId: channelId ?? null,
         channelName: channelName ?? null,
+        phoneNumber: phoneNumber ?? null,
         updatedAt: new Date().toISOString(),
       },
     };
@@ -139,6 +134,7 @@ export async function PUT(request: NextRequest) {
         apiToken: maskToken(apiToken),
         channelId: channelId ?? null,
         channelName: channelName ?? null,
+        phoneNumber: phoneNumber ?? null,
         connected: Boolean(channelId),
       },
     });

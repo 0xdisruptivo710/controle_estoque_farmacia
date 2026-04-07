@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { PageHeader } from '@/presentation/components/common/PageHeader';
-import { useAuthStore } from '@/store/authStore';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -12,6 +11,7 @@ interface FlwChatConfig {
   apiToken: string | null;
   channelId: string | null;
   channelName: string | null;
+  phoneNumber: string | null;
   connected: boolean;
 }
 
@@ -21,16 +21,31 @@ interface FlwChatChannel {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatPhone(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 10) {
+    return digits
+      .replace(/^(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{4})(\d)/, '$1-$2');
+  }
+  return digits
+    .replace(/^(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d)/, '$1-$2');
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 export default function IntegrationsSettingsPage() {
-  const user = useAuthStore((s) => s.user);
-
   // FlwChat state
   const [config, setConfig] = useState<FlwChatConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [tokenInput, setTokenInput] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -56,6 +71,9 @@ export default function IntegrationsSettingsPage() {
       setConfig(data.flwchat ?? null);
       if (data.flwchat?.channelId) {
         setSelectedChannelId(data.flwchat.channelId);
+      }
+      if (data.flwchat?.phoneNumber) {
+        setPhoneInput(data.flwchat.phoneNumber);
       }
     } catch {
       // silently fail — user will see disconnected state
@@ -130,6 +148,7 @@ export default function IntegrationsSettingsPage() {
           apiToken: tokenInput.trim(),
           channelId: selectedChannelId || undefined,
           channelName: selectedChannel?.name ?? undefined,
+          phoneNumber: phoneInput.trim() || undefined,
         }),
       });
 
@@ -159,7 +178,6 @@ export default function IntegrationsSettingsPage() {
   // ---------------------------------------------------------------------------
 
   const isConnected = config?.connected ?? false;
-  const isAdmin = user?.role === 'admin';
 
   // ---------------------------------------------------------------------------
   // Render
@@ -251,18 +269,6 @@ export default function IntegrationsSettingsPage() {
             className="border-t px-5 pb-5 pt-4 space-y-4"
             style={{ borderColor: 'var(--color-border, #E5E5EA)' }}
           >
-            {!isAdmin && (
-              <div
-                className="text-[13px] px-3 py-2 rounded-lg"
-                style={{
-                  backgroundColor: '#FF950015',
-                  color: '#FF9500',
-                }}
-              >
-                Apenas administradores podem alterar as configuracoes de integracao.
-              </div>
-            )}
-
             {/* Current saved token (masked) */}
             {config?.apiToken && (
               <div
@@ -275,6 +281,9 @@ export default function IntegrationsSettingsPage() {
                 Token salvo: <span className="font-mono">{config.apiToken}</span>
                 {config.channelName && (
                   <span className="ml-2">| Canal: {config.channelName}</span>
+                )}
+                {config.phoneNumber && (
+                  <span className="ml-2">| Tel: {config.phoneNumber}</span>
                 )}
               </div>
             )}
@@ -299,12 +308,11 @@ export default function IntegrationsSettingsPage() {
                     setSaveResult(null);
                   }}
                   placeholder="pn_..."
-                  disabled={!isAdmin}
-                  className="w-full rounded-lg border px-3 py-2.5 pr-10 text-[14px] font-mono outline-none transition-colors focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full rounded-lg border px-3 py-2.5 pr-10 text-[14px] font-mono outline-none transition-colors focus:ring-2"
                   style={{
                     borderColor: 'var(--color-border, #E5E5EA)',
                     color: 'var(--color-text-primary, #1C1C1E)',
-                    backgroundColor: !isAdmin ? 'var(--color-surface, #F2F2F7)' : '#FFFFFF',
+                    backgroundColor: '#FFFFFF',
                   }}
                   aria-label="Token da API FlwChat"
                 />
@@ -328,11 +336,43 @@ export default function IntegrationsSettingsPage() {
               </div>
             </div>
 
+            {/* Phone number input */}
+            <div>
+              <label
+                htmlFor="flwchat-phone"
+                className="block text-[13px] font-medium mb-1.5"
+                style={{ color: 'var(--color-text-primary, #1C1C1E)' }}
+              >
+                Numero de WhatsApp
+              </label>
+              <input
+                id="flwchat-phone"
+                type="tel"
+                value={phoneInput}
+                onChange={(e) => setPhoneInput(formatPhone(e.target.value))}
+                placeholder="(11) 99999-9999"
+                maxLength={15}
+                className="w-full rounded-lg border px-3 py-2.5 text-[14px] outline-none transition-colors focus:ring-2"
+                style={{
+                  borderColor: 'var(--color-border, #E5E5EA)',
+                  color: 'var(--color-text-primary, #1C1C1E)',
+                  backgroundColor: '#FFFFFF',
+                }}
+                aria-label="Numero de WhatsApp para envio de mensagens"
+              />
+              <p
+                className="text-[12px] mt-1"
+                style={{ color: 'var(--color-text-secondary, #6E6E73)' }}
+              >
+                Numero conectado no Aios/FlwChat para envio de mensagens
+              </p>
+            </div>
+
             {/* Test connection button */}
             <button
               type="button"
               onClick={handleTest}
-              disabled={testing || !isAdmin || !tokenInput.trim()}
+              disabled={testing || !tokenInput.trim()}
               className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-[14px] font-medium transition-all duration-200 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 backgroundColor: 'var(--color-surface, #F2F2F7)',
@@ -388,8 +428,7 @@ export default function IntegrationsSettingsPage() {
                   id="flwchat-channel"
                   value={selectedChannelId}
                   onChange={(e) => setSelectedChannelId(e.target.value)}
-                  disabled={!isAdmin}
-                  className="w-full rounded-lg border px-3 py-2.5 text-[14px] outline-none transition-colors focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed appearance-none bg-white"
+                  className="w-full rounded-lg border px-3 py-2.5 text-[14px] outline-none transition-colors focus:ring-2 appearance-none bg-white"
                   style={{
                     borderColor: 'var(--color-border, #E5E5EA)',
                     color: 'var(--color-text-primary, #1C1C1E)',
@@ -412,7 +451,7 @@ export default function IntegrationsSettingsPage() {
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={saving || !isAdmin || !tokenInput.trim()}
+                  disabled={saving || !tokenInput.trim()}
                   className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-[14px] font-semibold text-white transition-all duration-200 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ backgroundColor: 'var(--color-primary, #0A84FF)' }}
                   aria-label="Salvar configuracao FlwChat"
