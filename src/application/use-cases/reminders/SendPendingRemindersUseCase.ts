@@ -3,7 +3,6 @@ import type { SendRemindersResultDTO, ReminderResponseDTO } from '@/application/
 
 export interface INotificationService {
   sendWhatsApp(to: string, message: string): Promise<{ providerId: string }>;
-  sendEmail(to: string, subject: string, body: string): Promise<{ providerId: string }>;
   sendPush(endpoint: string, payload: string): Promise<{ providerId: string }>;
 }
 
@@ -45,22 +44,15 @@ export class SendPendingRemindersUseCase {
   private async sendReminder(reminder: ReminderResponseDTO): Promise<void> {
     const message = reminder.customMessage ?? this.buildDefaultMessage(reminder);
 
-    switch (reminder.channel) {
+    // Email channel is no longer supported — fallback to WhatsApp
+    const channel = reminder.channel === 'email' ? 'whatsapp' : reminder.channel;
+
+    switch (channel) {
       case 'whatsapp':
         if (!reminder.customerWhatsapp) {
           throw new Error('Cliente não possui WhatsApp cadastrado.');
         }
         await this.notificationService.sendWhatsApp(reminder.customerWhatsapp, message);
-        break;
-      case 'email':
-        if (!reminder.customerEmail) {
-          throw new Error('Cliente não possui e-mail cadastrado.');
-        }
-        await this.notificationService.sendEmail(
-          reminder.customerEmail,
-          `Lembrete de Recompra - ${reminder.productName ?? 'Produto'}`,
-          message,
-        );
         break;
       case 'push':
         await this.notificationService.sendPush('broadcast', message);

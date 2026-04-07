@@ -221,10 +221,9 @@ export default function NewReminderPage() {
         <div className="card p-5 space-y-4">
           <h2 className="text-sm font-semibold uppercase" style={{ color: 'var(--color-text-secondary)' }}>Canal de Envio</h2>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {[
               { value: 'whatsapp', label: 'WhatsApp', color: '#25D366' },
-              { value: 'email', label: 'E-mail', color: '#0A84FF' },
               { value: 'push', label: 'Push', color: '#FF9500' },
             ].map((ch) => (
               <button
@@ -259,7 +258,7 @@ export default function NewReminderPage() {
               <li>Cliente: <strong>{selectedCustomer?.full_name}</strong></li>
               {productId && <li>Produto: <strong>{products.find((p) => p.id === productId)?.name}</strong></li>}
               <li>Data: <strong>{new Date(scheduledDate + 'T12:00:00').toLocaleDateString('pt-BR')}</strong></li>
-              <li>Canal: <strong>{channel === 'whatsapp' ? 'WhatsApp' : channel === 'email' ? 'E-mail' : 'Push'}</strong></li>
+              <li>Canal: <strong>{channel === 'whatsapp' ? 'WhatsApp' : 'Push'}</strong></li>
               <li>Tipo: <strong>{reminderType === 'once' ? 'Avulso (unico)' : reminderType === 'recurring' ? `Recorrente (a cada ${recurringDays} dias)` : `Estimativa (${recurringDays} dias)`}</strong></li>
             </ul>
           </div>

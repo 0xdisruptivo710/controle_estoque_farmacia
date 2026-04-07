@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/infrastructure/supabase/server';
 import { SupabaseReminderRepository } from '@/infrastructure/repositories/SupabaseReminderRepository';
 import { SendPendingRemindersUseCase } from '@/application/use-cases/reminders/SendPendingRemindersUseCase';
-import { EvolutionWhatsAppService } from '@/infrastructure/services/EvolutionWhatsAppService';
-import { ResendEmailService } from '@/infrastructure/services/ResendEmailService';
+import { FlwChatWhatsAppService } from '@/infrastructure/services/FlwChatWhatsAppService';
 import { WebPushService } from '@/infrastructure/services/WebPushService';
 
 export const runtime = 'nodejs';
@@ -17,13 +16,11 @@ export async function GET(request: NextRequest) {
 
   try {
     const supabase = createServiceRoleClient();
-    const whatsapp = new EvolutionWhatsAppService();
-    const email = new ResendEmailService();
+    const whatsapp = new FlwChatWhatsAppService();
     const push = new WebPushService();
 
     const notificationService = {
       sendWhatsApp: (to: string, message: string) => whatsapp.sendWhatsApp(to, message),
-      sendEmail: (to: string, subject: string, body: string) => email.sendEmail(to, subject, body),
       sendPush: (endpoint: string, payload: string) => push.sendPush(endpoint, payload),
     };
 
