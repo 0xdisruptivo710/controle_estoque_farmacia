@@ -44,7 +44,7 @@ export default function SetupPage() {
       }
       // If user already has a profile with pharmacy, skip setup
       const { data: profile } = await supabase
-        .from('profiles')
+        .from('x3_profiles')
         .select('pharmacy_id')
         .eq('id', data.user.id)
         .maybeSingle();

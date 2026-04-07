@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
 
     const admin = createServiceRoleClient();
     const { error } = await admin
-      .from('profiles')
+      .from('x3_profiles')
       .update({
         push_endpoint: endpoint,
         push_keys: keys,

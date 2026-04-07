@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
 
     const admin = createServiceRoleClient();
     const { data: profile } = await admin
-      .from('profiles')
+      .from('x3_profiles')
       .select('push_endpoint, push_keys')
       .eq('id', profileId)
       .single();

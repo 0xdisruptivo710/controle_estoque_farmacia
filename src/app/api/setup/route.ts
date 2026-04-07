@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     // 1. Check if user already has a profile with pharmacy
     const { data: existingProfile } = await admin
-      .from('profiles')
+      .from('x3_profiles')
       .select('id, pharmacy_id')
       .eq('id', user.id)
       .maybeSingle();
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
 
     // 5. Link profile to pharmacy (atomic upsert — INSERT or UPDATE in one op)
     const { error: profileError } = await admin
-      .from('profiles')
+      .from('x3_profiles')
       .upsert({
         id: user.id,
         pharmacy_id: pharmacy.id,

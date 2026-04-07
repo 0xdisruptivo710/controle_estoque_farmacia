@@ -81,7 +81,7 @@ export async function middleware(request: NextRequest) {
 
       // Slow path: query DB to check profile
       const { data: profile, error: profileError } = await supabase
-        .from('profiles')
+        .from('x3_profiles')
         .select('id, pharmacy_id')
         .eq('id', user.id)
         .maybeSingle();

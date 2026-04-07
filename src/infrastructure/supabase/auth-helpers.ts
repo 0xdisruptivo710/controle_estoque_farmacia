@@ -16,7 +16,7 @@ export async function getAuthenticatedProfile() {
   // Use service role for ALL database operations to bypass RLS issues
   const admin = createServiceRoleClient();
   const { data: profile, error: profileError } = await admin
-    .from('profiles')
+    .from('x3_profiles')
     .select('id, pharmacy_id, full_name, role')
     .eq('id', user.id)
     .maybeSingle();

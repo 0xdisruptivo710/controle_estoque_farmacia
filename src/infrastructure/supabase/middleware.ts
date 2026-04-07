@@ -55,7 +55,7 @@ export async function updateSession(request: NextRequest) {
   // Authenticated on non-auth, non-setup, non-api page → check profile exists
   if (user && !isAuthPage && !isSetupPage && !isApiRoute) {
     const { data: profile } = await supabase
-      .from('profiles')
+      .from('x3_profiles')
       .select('id, pharmacy_id')
       .eq('id', user.id)
       .single();

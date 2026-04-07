@@ -101,7 +101,7 @@ export default function DashboardLayout({
         }
 
         const { data: profile } = await supabase
-          .from('profiles')
+          .from('x3_profiles')
           .select('id, pharmacy_id, full_name, role, avatar_url')
           .eq('id', authUser.id)
           .maybeSingle();
