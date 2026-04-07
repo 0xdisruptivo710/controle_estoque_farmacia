@@ -44,8 +44,7 @@ export class SendPendingRemindersUseCase {
   private async sendReminder(reminder: ReminderResponseDTO): Promise<void> {
     const message = reminder.customMessage ?? this.buildDefaultMessage(reminder);
 
-    // Email channel is no longer supported — fallback to WhatsApp
-    const channel = reminder.channel === 'email' ? 'whatsapp' : reminder.channel;
+    const channel = reminder.channel;
 
     switch (channel) {
       case 'whatsapp':

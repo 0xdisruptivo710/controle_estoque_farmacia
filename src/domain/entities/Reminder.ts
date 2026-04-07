@@ -8,7 +8,7 @@ export type ReminderStatus =
   | 'ignored'
   | 'cancelled';
 
-export type ReminderChannel = 'push' | 'whatsapp' | 'email' | 'sms';
+export type ReminderChannel = 'push' | 'whatsapp';
 
 export interface ReminderProps {
   id: string;

@@ -1,5 +1,5 @@
 export type ReminderStatus = 'scheduled' | 'sent' | 'viewed' | 'converted' | 'ignored' | 'cancelled';
-export type ReminderChannel = 'push' | 'whatsapp' | 'email' | 'sms';
+export type ReminderChannel = 'push' | 'whatsapp';
 
 export interface ScheduleReminderDTO {
   pharmacyId: string;
