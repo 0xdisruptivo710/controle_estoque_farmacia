@@ -1,17 +1,14 @@
 -- ============================================================
--- APLICAÇÃO ÚNICA — cole tudo no SQL editor do Supabase:
+-- APLICAÇÃO ÚNICA — cole no SQL editor do Supabase:
 -- https://supabase.com/dashboard/project/ehlpmukjdknnyhkycncb/sql/new
 --
--- Combina duas migrações:
---   1) 20260421000001_platform_admins.sql
---   2) 20260421000002_team_invitations.sql
---
--- Seguro para rodar múltiplas vezes (idempotente via IF NOT EXISTS / DROP IF EXISTS).
+-- Combina duas migrações (20260421000001 + 20260421000002).
+-- Idempotente. Não toca em policies existentes de outras tabelas.
 -- ============================================================
 
--- ==========================================================
+-- ============================================================
 -- MIGRAÇÃO 1: Platform admin (super-admin cross-tenant)
--- ==========================================================
+-- ============================================================
 
 -- 1.1 Tabela fonte de verdade
 CREATE TABLE IF NOT EXISTS x3_platform_admins (
@@ -59,7 +56,7 @@ CREATE TRIGGER trigger_sync_platform_admin_flag
   AFTER INSERT OR UPDATE OR DELETE ON x3_platform_admins
   FOR EACH ROW EXECUTE FUNCTION sync_platform_admin_flag();
 
--- 1.4 Função RLS helper (public schema — auth schema é restrito no SQL editor)
+-- 1.4 Função RLS helper em public (auth é restrito)
 CREATE OR REPLACE FUNCTION public.is_platform_admin()
 RETURNS BOOLEAN AS $$
   SELECT COALESCE(
@@ -71,7 +68,7 @@ $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
 GRANT EXECUTE ON FUNCTION public.is_platform_admin() TO authenticated, anon, service_role;
 
--- 1.5 RLS na tabela x3_platform_admins
+-- 1.5 RLS na tabela x3_platform_admins (auto-contida)
 ALTER TABLE x3_platform_admins ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "platform_admin_read" ON x3_platform_admins;
@@ -82,42 +79,10 @@ DROP POLICY IF EXISTS "platform_admin_write" ON x3_platform_admins;
 CREATE POLICY "platform_admin_write" ON x3_platform_admins
   FOR ALL USING (public.is_platform_admin()) WITH CHECK (public.is_platform_admin());
 
--- 1.6 Bypass de platform admin nas policies de tenant
-DO $$
-DECLARE
-  t TEXT;
-  tenant_tables TEXT[] := ARRAY[
-    'customers', 'suppliers', 'products', 'stock_items', 'stock_movements',
-    'orders', 'repurchase_reminders', 'notification_logs', 'message_templates'
-  ];
-BEGIN
-  FOREACH t IN ARRAY tenant_tables LOOP
-    EXECUTE format('DROP POLICY IF EXISTS "pharmacy_isolation" ON %I', t);
-    EXECUTE format(
-      'CREATE POLICY "pharmacy_isolation" ON %I '
-      'FOR ALL USING (pharmacy_id = auth.pharmacy_id() OR public.is_platform_admin()) '
-      'WITH CHECK (pharmacy_id = auth.pharmacy_id() OR public.is_platform_admin())',
-      t
-    );
-  END LOOP;
-END $$;
-
--- 1.7 pharmacies + x3_profiles — platform admin vê tudo
-DROP POLICY IF EXISTS "pharmacy_self_or_platform" ON pharmacies;
-CREATE POLICY "pharmacy_self_or_platform" ON pharmacies
-  FOR SELECT USING (id = auth.pharmacy_id() OR public.is_platform_admin());
-
-DROP POLICY IF EXISTS "profile_visibility" ON x3_profiles;
-CREATE POLICY "profile_visibility" ON x3_profiles
-  FOR SELECT USING (
-    id = auth.uid() OR pharmacy_id = auth.pharmacy_id() OR public.is_platform_admin()
-  );
-
--- ==========================================================
+-- ============================================================
 -- MIGRAÇÃO 2: Team invitations
--- ==========================================================
+-- ============================================================
 
--- 2.1 Tabela de convites
 CREATE TABLE IF NOT EXISTS x3_invitations (
   id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   pharmacy_id       UUID NOT NULL REFERENCES pharmacies(id) ON DELETE CASCADE,
@@ -142,7 +107,6 @@ CREATE TRIGGER set_invitations_updated_at
   BEFORE UPDATE ON x3_invitations
   FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
 
--- 2.2 Índices
 CREATE INDEX IF NOT EXISTS idx_invitations_pharmacy_id
   ON x3_invitations(pharmacy_id) WHERE revoked_at IS NULL AND accepted_at IS NULL;
 
@@ -153,24 +117,38 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_invitations_unique_pending
   ON x3_invitations(pharmacy_id, LOWER(email))
   WHERE revoked_at IS NULL AND accepted_at IS NULL;
 
--- 2.3 RLS
 ALTER TABLE x3_invitations ENABLE ROW LEVEL SECURITY;
 
+-- RLS autocontida: não depende de auth.pharmacy_id() nem auth.user_role()
 DROP POLICY IF EXISTS "invitation_admin_manage" ON x3_invitations;
 CREATE POLICY "invitation_admin_manage" ON x3_invitations
   FOR ALL
   USING (
-    (pharmacy_id = auth.pharmacy_id() AND auth.user_role() = 'admin')
-    OR public.is_platform_admin()
+    EXISTS (
+      SELECT 1 FROM x3_profiles p
+      WHERE p.id = auth.uid()
+        AND (
+          (p.pharmacy_id = x3_invitations.pharmacy_id AND p.role = 'admin')
+          OR p.is_platform_admin = TRUE
+        )
+    )
   )
   WITH CHECK (
-    (pharmacy_id = auth.pharmacy_id() AND auth.user_role() = 'admin')
-    OR public.is_platform_admin()
+    EXISTS (
+      SELECT 1 FROM x3_profiles p
+      WHERE p.id = auth.uid()
+        AND (
+          (p.pharmacy_id = x3_invitations.pharmacy_id AND p.role = 'admin')
+          OR p.is_platform_admin = TRUE
+        )
+    )
   );
 
--- ==========================================================
--- FIM — verificação rápida (opcional)
--- ==========================================================
--- Se quiser confirmar que rodou, descomente e rode:
--- SELECT table_name FROM information_schema.tables
--- WHERE table_name IN ('x3_platform_admins', 'x3_invitations');
+-- ============================================================
+-- FIM. Verificação opcional:
+--   SELECT table_name FROM information_schema.tables
+--   WHERE table_name IN ('x3_platform_admins', 'x3_invitations');
+--
+--   SELECT column_name FROM information_schema.columns
+--   WHERE table_name = 'x3_profiles' AND column_name = 'is_platform_admin';
+-- ============================================================
