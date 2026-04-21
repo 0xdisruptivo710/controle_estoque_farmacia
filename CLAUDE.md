@@ -1,10 +1,18 @@
 # CLAUDE.md — PharmaControl: Orquestrador Principal do Projeto
 
-> **Versão:** 1.1.0  
-> **Projeto:** PharmaControl — Sistema de Controle de Estoque e Recompras para Farmácias de Manipulação  
-> **Última atualização:** 2026-03-30  
-> **Stack:** Next.js 14 (App Router) + TypeScript + Supabase + Tailwind CSS  
+> **Versão:** 1.2.0
+> **Projeto:** PharmaControl — Sistema de Controle de Estoque e Recompras para Farmácias de Manipulação
+> **Última atualização:** 2026-04-21
+> **Stack real:** Next.js **16.2.2** (App Router) · React 19.2 · TypeScript 5 · Tailwind v4 · Supabase SSR 0.10
 > **Deploy:** Vercel (produção + staging + preview automático por PR)
+
+> 🛈 **Note de realidade:** parte do SQL de referência neste documento (em `auth.pharmacy_id()`, `auth.user_role()`)
+> **não** existe no banco live — o schema evoluiu separadamente. Helpers de RLS vivem em **`public`**.
+> Ao adicionar migrações, prefira `public.<helper>()` ou inline a lógica via `EXISTS (SELECT ... FROM x3_profiles)`.
+> Nomenclatura real: `x3_profiles` (prefixo Aios) e `x3_platform_admins`; as demais tabelas PharmaControl-específicas
+> usam prefixo `pc_` (ex: `pc_invitations`). Tabelas legadas sem prefixo: `pharmacies`, `customers`, `products`,
+> `orders`, `order_items`, `stock_items`, `stock_movements`, `repurchase_reminders`, `notification_logs`,
+> `message_templates`, `suppliers`, `stock_alerts_config`, `audit_logs`.
 
 ---
 
@@ -1439,9 +1447,35 @@ pnpm dev
 
 ---
 
+## 🆕 Sprint 2026-04-21 — Platform admin + Team invitations
+
+Adicionado nesta sprint (detalhes completos em `docs/PRD.md`):
+
+### Platform admin (super-admin cross-tenant)
+- Tabela `x3_platform_admins` (fonte de verdade + auditoria) + coluna `is_platform_admin` em `x3_profiles` (cache).
+- Trigger `sync_platform_admin_flag` mantém tabela ↔ flag em sincronia.
+- Função `public.is_platform_admin()` — usada em RLS. **Não** `auth.is_platform_admin()` (schema `auth` é restrito).
+- Bootstrap via `pnpm owner:create` (script em `scripts/create-owner.mjs` — usa service role, não depende de e-mail).
+
+### Team invitations
+- Tabela `pc_invitations` (prefixo `pc_` pra evitar colisão com Aios).
+- 7 endpoints: 5 privados em `/api/team/*` (admin) + 2 públicos em `/api/invitations/[token]*`.
+- Página `/settings/team` (lista membros + convites pendentes + modal).
+- Página pública `/invite/[token]`.
+- Canal híbrido: tenta FlwChat, sempre mostra link manual.
+
+### Regras a respeitar ao mexer nessas áreas
+- **Registration flow via UI é instável** sem SMTP configurado — confirme que "Confirm email" está desligado no Supabase Auth ou use o script.
+- Novos helpers de RLS em **`public`** schema — nunca `auth`.
+- Tabelas PharmaControl-novas usam prefixo **`pc_`**. Tabelas compartilhadas com Aios usam **`x3_`**. Tabelas legadas sem prefixo.
+- `getAuthenticatedProfile()` já retorna `isPlatformAdmin` — use-o em vez de consultar a tabela.
+- `requirePharmacyAdmin()` aceita tanto `role='admin'` quanto `is_platform_admin`.
+
+---
+
 ## 📌 REFERÊNCIAS
 
-- [Next.js 14 Docs](https://nextjs.org/docs)
+- [Next.js 16 Docs](https://nextjs.org/docs)
 - [Vercel Docs](https://vercel.com/docs)
 - [Vercel Cron Jobs](https://vercel.com/docs/cron-jobs)
 - [Vercel Environment Variables](https://vercel.com/docs/environment-variables)

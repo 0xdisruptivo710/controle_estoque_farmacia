@@ -1,8 +1,8 @@
 # PRD — PharmaControl
 
-> **Versão:** 1.2.0
-> **Última atualização:** 2026-04-21
-> **Stack real (vs. CLAUDE.md):** Next.js **16.2.2** (App Router) · React 19.2 · TypeScript 5 · Tailwind v4 · Supabase SSR 0.10 · Sentry 10 · Zustand 5 · TanStack Query 5 · Recharts 3 · Framer Motion 12
+> **Versão:** 1.3.0
+> **Última atualização:** 2026-04-21 (pós-aplicação real em produção)
+> **Stack real (vs. CLAUDE.md original):** Next.js **16.2.2** (App Router) · React 19.2 · TypeScript 5 · Tailwind v4 · Supabase SSR 0.10 · Sentry 10 · Zustand 5 · TanStack Query 5 · Recharts 3 · Framer Motion 12
 
 ---
 
@@ -267,8 +267,9 @@ Implementado em `20260421000001_platform_admins.sql`.
 - **Fonte de verdade:** tabela `x3_platform_admins` (com auditoria: `granted_by`, `granted_at`, `revoked_at`, `notes`).
 - **Cache:** coluna `is_platform_admin` em `x3_profiles` para RLS rápido sem JOIN.
 - **Sincronização:** trigger `trigger_sync_platform_admin_flag` mantém flag ↔ tabela.
-- **Helper SQL:** `auth.is_platform_admin()` retorna `BOOLEAN` lendo o flag.
-- **RLS:** cada policy `pharmacy_isolation` ganhou `OR auth.is_platform_admin()`.
+- **Helper SQL:** `public.is_platform_admin()` retorna `BOOLEAN` lendo o flag (em `public` schema, não `auth`, pois o SQL editor do Supabase não permite DDL em `auth`).
+- **RLS:** policies próprias de `x3_platform_admins`, `pc_invitations`, e extensão de `profile_visibility` em `x3_profiles`. Tabelas de tenant (`customers`, `orders`, etc.) **não** foram alteradas — platform admin usa service role para ler cross-tenant (mesmo padrão das demais API routes).
+- **Bootstrap:** `pnpm owner:create` → `scripts/create-owner.mjs` usa service role para criar auth user (com `email_confirm=true`, bypassando email SMTP), pharmacy, profile e marcar como platform admin. Idempotente.
 
 ### 4.4 Fluxo de convite (novo)
 
@@ -328,9 +329,9 @@ ADMIN                                        INVITEE
 - Todo `TIMESTAMPTZ` (timezone-aware).
 
 ### 5.3 RLS
-- `pharmacy_isolation`: `pharmacy_id = auth.pharmacy_id() OR auth.is_platform_admin()`
-- `profile_visibility`: próprio OR mesma farmácia OR platform admin
-- `invitation_admin_manage`: admin da farmácia OR platform admin
+- `pharmacy_isolation`: **não foi alterada** — o live DB não tem `auth.pharmacy_id()` do design original. Policies existentes permanecem intactas. Platform admin lê cross-tenant via service role.
+- `profile_visibility`: próprio OR mesma farmácia OR platform admin (a única policy de tenant que foi estendida).
+- `invitation_admin_manage`: inline EXISTS check — `role = 'admin'` OR `is_platform_admin = TRUE`.
 
 ### 5.4 Triggers e jobs
 - `auto_schedule_reminder` — cria lembrete ao entregar pedido
@@ -389,10 +390,11 @@ CRON_SECRET
 
 ### 7.1 Super-admin (platform admin)
 - Tabela `x3_platform_admins` + coluna `is_platform_admin` em `x3_profiles`
-- Função `auth.is_platform_admin()` + trigger de sync
-- 12 RLS policies atualizadas para bypass de platform admin
+- Função `public.is_platform_admin()` + trigger de sync
+- 3 policies próprias (nas tabelas novas + `x3_profiles.profile_visibility`) — tenant tables intactas (bypass via service role)
 - Helpers `requirePlatformAdmin` e `requirePharmacyAdmin` em `auth-helpers.ts`
-- Bootstrap SQL em `supabase/seed_platform_admin.sql`
+- **Bootstrap automatizado:** `scripts/create-owner.mjs` via `pnpm owner:create` — evita fluxo de e-mail instável
+- Bootstrap SQL alternativo em `supabase/seed_platform_admin.sql` (caso queira via SQL editor)
 
 ### 7.2 Fluxo de convites
 - Tabela `pc_invitations` com unique partial index para anti-duplicação
@@ -418,7 +420,35 @@ CRON_SECRET
 
 ---
 
-## 9. Convenções
+## 9. Armadilhas e restrições aprendidas na aplicação real
+
+Lições da primeira aplicação em produção (2026-04-21). Documentadas aqui para futuros agentes não repetirem o mesmo ciclo de debug.
+
+### 9.1 Fluxo `/register` é instável sem SMTP
+Supabase Auth exige confirmação de e-mail por padrão. Sem SMTP configurado, o `signUp()` cria o user mas não gera sessão, e o usuário é redirecionado de `/register` → `/setup` → `/login` (parece "nada acontece").
+**Solução adotada:** script `scripts/create-owner.mjs` (`pnpm owner:create`) usa service role com `email_confirm=true` para criar o owner sem depender de SMTP. Para convites de atendentes, o fluxo `/invite/[token]` também cria o user via service role, pulando confirmação.
+**Ação para quem for desativar confirmação no Dashboard:** Authentication → Providers → Email → desligar "Confirm email" (só faça se estiver confortável; a solução via service role é preferível).
+
+### 9.2 Schema `auth` é restrito no SQL editor
+`CREATE OR REPLACE FUNCTION auth.is_platform_admin()` retorna `ERROR: 42501: permission denied for schema auth`. O SQL editor do Supabase Dashboard roda em um role sem DDL em `auth`. Funções `auth.pharmacy_id()` e `auth.user_role()` referenciadas na CLAUDE.md original **não foram criadas** no banco vivo — tentativas legadas provavelmente também falharam.
+**Solução adotada:** todas as funções helper em `public` schema. RLS que precisa dessas funções **não as usa** — inline o EXISTS em vez disso (ver `invitation_admin_manage`).
+
+### 9.3 Colisão de namespace `x3_*`
+O prefixo `x3_` é compartilhado com o Aios CRM (mesma instância Supabase). Uma tabela `x3_invitations` pré-existente no Aios tem schema diferente da nossa — `CREATE TABLE IF NOT EXISTS` pulou a criação e os índices subsequentes falharam com `column "revoked_at" does not exist`.
+**Solução adotada:** tabelas PharmaControl-específicas novas usam prefixo `pc_` (ex: `pc_invitations`). Somente tabelas que de fato **têm** correspondência com Aios (como `x3_profiles`, `x3_platform_admins`) mantêm `x3_`.
+**Regra:** antes de criar nova tabela `x3_<nome>`, verifique se já existe no Aios.
+
+### 9.4 CLI do Supabase precisa de postinstall manual no pnpm
+O pacote `supabase` como devDependency tem `postinstall` que baixa o binário. O pnpm com `executedSideEffectsBuildScripts` às vezes não executa, deixando `node_modules/supabase/bin/` vazio.
+**Fix:** rodar `node node_modules/supabase/scripts/postinstall.js` manualmente. Depois disso, `supabase link` + `supabase db push` funcionam.
+**Alternativa para evitar link interativo:** aplicar migrações via SQL editor usando `supabase/apply_migrations_*.sql` (consolidado idempotente).
+
+### 9.5 File line endings (CRLF) em Windows
+Git avisa `LF will be replaced by CRLF` em todos os writes. Não é bug — é normal no Windows. Ignorar.
+
+---
+
+## 10. Convenções
 
 - **Commits:** Conventional Commits (`feat(...)`, `fix(...)`, `chore(...)`, `refactor(...)`, `docs(...)`).
 - **Migrations:** timestamp `YYYYMMDDHHMMSS_nome.sql`, bloco de rollback comentado.
