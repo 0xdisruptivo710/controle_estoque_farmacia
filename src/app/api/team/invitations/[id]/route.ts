@@ -14,7 +14,7 @@ export async function DELETE(
   const { id } = await params;
 
   const { error } = await ctx.admin
-    .from('x3_invitations')
+    .from('pc_invitations')
     .update({ revoked_at: new Date().toISOString() })
     .eq('id', id)
     .eq('pharmacy_id', ctx.profile.pharmacy_id)

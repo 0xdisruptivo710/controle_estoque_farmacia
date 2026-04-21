@@ -83,7 +83,7 @@ CREATE POLICY "platform_admin_write" ON x3_platform_admins
 -- MIGRAÇÃO 2: Team invitations
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS x3_invitations (
+CREATE TABLE IF NOT EXISTS pc_invitations (
   id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   pharmacy_id       UUID NOT NULL REFERENCES pharmacies(id) ON DELETE CASCADE,
   full_name         VARCHAR(255) NOT NULL,
@@ -102,33 +102,33 @@ CREATE TABLE IF NOT EXISTS x3_invitations (
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-DROP TRIGGER IF EXISTS set_invitations_updated_at ON x3_invitations;
+DROP TRIGGER IF EXISTS set_invitations_updated_at ON pc_invitations;
 CREATE TRIGGER set_invitations_updated_at
-  BEFORE UPDATE ON x3_invitations
+  BEFORE UPDATE ON pc_invitations
   FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
 
 CREATE INDEX IF NOT EXISTS idx_invitations_pharmacy_id
-  ON x3_invitations(pharmacy_id) WHERE revoked_at IS NULL AND accepted_at IS NULL;
+  ON pc_invitations(pharmacy_id) WHERE revoked_at IS NULL AND accepted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_invitations_token
-  ON x3_invitations(token) WHERE revoked_at IS NULL AND accepted_at IS NULL;
+  ON pc_invitations(token) WHERE revoked_at IS NULL AND accepted_at IS NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_invitations_unique_pending
-  ON x3_invitations(pharmacy_id, LOWER(email))
+  ON pc_invitations(pharmacy_id, LOWER(email))
   WHERE revoked_at IS NULL AND accepted_at IS NULL;
 
-ALTER TABLE x3_invitations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pc_invitations ENABLE ROW LEVEL SECURITY;
 
 -- RLS autocontida: não depende de auth.pharmacy_id() nem auth.user_role()
-DROP POLICY IF EXISTS "invitation_admin_manage" ON x3_invitations;
-CREATE POLICY "invitation_admin_manage" ON x3_invitations
+DROP POLICY IF EXISTS "invitation_admin_manage" ON pc_invitations;
+CREATE POLICY "invitation_admin_manage" ON pc_invitations
   FOR ALL
   USING (
     EXISTS (
       SELECT 1 FROM x3_profiles p
       WHERE p.id = auth.uid()
         AND (
-          (p.pharmacy_id = x3_invitations.pharmacy_id AND p.role = 'admin')
+          (p.pharmacy_id = pc_invitations.pharmacy_id AND p.role = 'admin')
           OR p.is_platform_admin = TRUE
         )
     )
@@ -138,7 +138,7 @@ CREATE POLICY "invitation_admin_manage" ON x3_invitations
       SELECT 1 FROM x3_profiles p
       WHERE p.id = auth.uid()
         AND (
-          (p.pharmacy_id = x3_invitations.pharmacy_id AND p.role = 'admin')
+          (p.pharmacy_id = pc_invitations.pharmacy_id AND p.role = 'admin')
           OR p.is_platform_admin = TRUE
         )
     )
@@ -147,7 +147,7 @@ CREATE POLICY "invitation_admin_manage" ON x3_invitations
 -- ============================================================
 -- FIM. Verificação opcional:
 --   SELECT table_name FROM information_schema.tables
---   WHERE table_name IN ('x3_platform_admins', 'x3_invitations');
+--   WHERE table_name IN ('x3_platform_admins', 'pc_invitations');
 --
 --   SELECT column_name FROM information_schema.columns
 --   WHERE table_name = 'x3_profiles' AND column_name = 'is_platform_admin';

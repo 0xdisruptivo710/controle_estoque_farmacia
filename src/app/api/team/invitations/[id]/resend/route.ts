@@ -17,7 +17,7 @@ export async function POST(
   const { id } = await params;
 
   const { data: invite, error: fetchError } = await ctx.admin
-    .from('x3_invitations')
+    .from('pc_invitations')
     .select('id, full_name, email, whatsapp, role, token, expires_at, accepted_at, revoked_at')
     .eq('id', id)
     .eq('pharmacy_id', ctx.profile.pharmacy_id)
@@ -70,7 +70,7 @@ export async function POST(
     await service.sendWhatsApp(invite.whatsapp, message);
 
     await ctx.admin
-      .from('x3_invitations')
+      .from('pc_invitations')
       .update({ sent_via: 'whatsapp', sent_at: new Date().toISOString(), expires_at: newExpiry })
       .eq('id', invite.id);
 

@@ -20,7 +20,7 @@ export async function POST(
   const admin = createServiceRoleClient();
 
   const { data: invite, error: fetchError } = await admin
-    .from('x3_invitations')
+    .from('pc_invitations')
     .select('id, pharmacy_id, email, role, expires_at, accepted_at, revoked_at')
     .eq('token', token)
     .maybeSingle();
@@ -64,7 +64,7 @@ export async function POST(
 
   // 3. Mark invitation as accepted
   await admin
-    .from('x3_invitations')
+    .from('pc_invitations')
     .update({ accepted_at: new Date().toISOString(), accepted_user_id: created.user.id })
     .eq('id', invite.id);
 

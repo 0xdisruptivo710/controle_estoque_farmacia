@@ -5,7 +5,7 @@
 -- created when the invitee accepts (to avoid ghost accounts).
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS x3_invitations (
+CREATE TABLE IF NOT EXISTS pc_invitations (
   id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   pharmacy_id       UUID NOT NULL REFERENCES pharmacies(id) ON DELETE CASCADE,
   full_name         VARCHAR(255) NOT NULL,
@@ -25,30 +25,30 @@ CREATE TABLE IF NOT EXISTS x3_invitations (
 );
 
 CREATE TRIGGER set_invitations_updated_at
-  BEFORE UPDATE ON x3_invitations
+  BEFORE UPDATE ON pc_invitations
   FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
 
 CREATE INDEX IF NOT EXISTS idx_invitations_pharmacy_id
-  ON x3_invitations(pharmacy_id)
+  ON pc_invitations(pharmacy_id)
   WHERE revoked_at IS NULL AND accepted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_invitations_token
-  ON x3_invitations(token)
+  ON pc_invitations(token)
   WHERE revoked_at IS NULL AND accepted_at IS NULL;
 
 -- Prevent multiple pending invites for the same email in the same pharmacy
 CREATE UNIQUE INDEX IF NOT EXISTS idx_invitations_unique_pending
-  ON x3_invitations(pharmacy_id, LOWER(email))
+  ON pc_invitations(pharmacy_id, LOWER(email))
   WHERE revoked_at IS NULL AND accepted_at IS NULL;
 
 -- ============================================================
 -- RLS: admin of the pharmacy manages invites; platform admin sees all
 -- Public accept flow uses service role, bypassing RLS.
 -- ============================================================
-ALTER TABLE x3_invitations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pc_invitations ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "invitation_admin_manage" ON x3_invitations;
-CREATE POLICY "invitation_admin_manage" ON x3_invitations
+DROP POLICY IF EXISTS "invitation_admin_manage" ON pc_invitations;
+CREATE POLICY "invitation_admin_manage" ON pc_invitations
   FOR ALL
   USING (
     (pharmacy_id = auth.pharmacy_id() AND auth.user_role() = 'admin')
@@ -62,5 +62,5 @@ CREATE POLICY "invitation_admin_manage" ON x3_invitations
 -- ============================================================
 -- ROLLBACK
 -- ============================================================
--- DROP POLICY IF EXISTS "invitation_admin_manage" ON x3_invitations;
--- DROP TABLE IF EXISTS x3_invitations;
+-- DROP POLICY IF EXISTS "invitation_admin_manage" ON pc_invitations;
+-- DROP TABLE IF EXISTS pc_invitations;

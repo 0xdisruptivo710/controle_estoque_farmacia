@@ -13,7 +13,7 @@ export async function GET() {
   }
 
   const { data, error } = await ctx.admin
-    .from('x3_invitations')
+    .from('pc_invitations')
     .select('id, full_name, email, whatsapp, role, token, sent_via, sent_at, expires_at, created_at')
     .eq('pharmacy_id', ctx.profile.pharmacy_id)
     .is('revoked_at', null)
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
 
   // Reject if there's a pending invite for the same email in this pharmacy
   const { data: existing } = await ctx.admin
-    .from('x3_invitations')
+    .from('pc_invitations')
     .select('id')
     .eq('pharmacy_id', ctx.profile.pharmacy_id)
     .ilike('email', email)
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
   const expiresAt = new Date(Date.now() + EXPIRY_DAYS * 86400_000).toISOString();
 
   const { data: invite, error: insertError } = await ctx.admin
-    .from('x3_invitations')
+    .from('pc_invitations')
     .insert({
       pharmacy_id: ctx.profile.pharmacy_id,
       full_name: fullName,
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
         await service.sendWhatsApp(whatsapp, message);
         whatsappSent = true;
         await ctx.admin
-          .from('x3_invitations')
+          .from('pc_invitations')
           .update({ sent_via: 'whatsapp', sent_at: new Date().toISOString() })
           .eq('id', invite.id);
       } catch (err) {

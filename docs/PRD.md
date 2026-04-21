@@ -279,7 +279,7 @@ ADMIN                                        INVITEE
   POST /api/team/invitations
     ├── valida admin?
     ├── gera token aleatório 32b
-    ├── INSERT x3_invitations (expires +7d)
+    ├── INSERT pc_invitations (expires +7d)
     └── se whatsapp+FlwChat OK → sendWhatsApp
   modal: "enviado via WhatsApp" ou "copie o link"
                                              ↓ (recebe link)
@@ -310,7 +310,7 @@ ADMIN                                        INVITEE
 **Prefixadas com `x3_`** (coexistência com Aios):
 - `x3_profiles` — usuários da farmácia (liga `auth.users` ↔ `pharmacies`)
 - `x3_platform_admins` — super-admins (novo)
-- `x3_invitations` — convites pendentes (novo)
+- `pc_invitations` — convites pendentes (novo)
 
 **Sem prefixo:**
 - `pharmacies` — tenants
@@ -395,7 +395,7 @@ CRON_SECRET
 - Bootstrap SQL em `supabase/seed_platform_admin.sql`
 
 ### 7.2 Fluxo de convites
-- Tabela `x3_invitations` com unique partial index para anti-duplicação
+- Tabela `pc_invitations` com unique partial index para anti-duplicação
 - 7 endpoints: list/create/revoke/resend (admin) + preview/accept (público)
 - Página `/settings/team` rebuild (lista membros + convites pendentes + modal)
 - Página pública `/invite/[token]` (preview + aceite)

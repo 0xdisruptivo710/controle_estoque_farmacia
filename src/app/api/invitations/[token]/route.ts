@@ -9,7 +9,7 @@ export async function GET(
   const admin = createServiceRoleClient();
 
   const { data: invite, error } = await admin
-    .from('x3_invitations')
+    .from('pc_invitations')
     .select('id, full_name, email, role, pharmacy_id, expires_at, accepted_at, revoked_at')
     .eq('token', token)
     .maybeSingle();
