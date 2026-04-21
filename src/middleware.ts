@@ -46,6 +46,7 @@ export async function middleware(request: NextRequest) {
 
     const isSetupPage = pathname.startsWith('/setup');
     const isApiRoute = pathname.startsWith('/api');
+    const isInvitePage = pathname.startsWith('/invite');
 
     // Redirect helper — copies refreshed session cookies to the redirect response
     function redirect(path: string) {
@@ -58,8 +59,8 @@ export async function middleware(request: NextRequest) {
       return response;
     }
 
-    // Not authenticated → login (except auth pages and API routes)
-    if (!user && !isAuthPage && !isApiRoute) {
+    // Not authenticated → login (except auth pages, API routes, invite accept)
+    if (!user && !isAuthPage && !isApiRoute && !isInvitePage) {
       // Clear pharmacy cookie on logout
       const response = redirect('/login');
       response.cookies.delete(PHARMACY_COOKIE);
@@ -71,8 +72,8 @@ export async function middleware(request: NextRequest) {
       return redirect('/');
     }
 
-    // Authenticated, not on setup/auth/api → verify profile exists
-    if (user && !isAuthPage && !isSetupPage && !isApiRoute) {
+    // Authenticated, not on setup/auth/api/invite → verify profile exists
+    if (user && !isAuthPage && !isSetupPage && !isApiRoute && !isInvitePage) {
       // Fast path: cookie set after successful setup — skip DB query
       const hasPharmacyCookie = request.cookies.get(PHARMACY_COOKIE);
       if (hasPharmacyCookie) {
