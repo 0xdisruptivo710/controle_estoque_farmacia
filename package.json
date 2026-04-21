@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "owner:create": "node scripts/create-owner.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

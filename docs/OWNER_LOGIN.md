@@ -6,11 +6,35 @@
 
 ---
 
-## Pré-requisitos
+## Caminho rápido (recomendado)
+
+O jeito mais simples é rodar o script que cria tudo de uma vez: usuário com e-mail já confirmado, farmácia mestre, profile `admin` e marca como platform admin.
+
+```bash
+cd pharmacontrol
+
+# Garanta que o .env.local tem NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY
+vercel env pull .env.local    # se ainda não tiver
+
+pnpm owner:create             # interativo: pede e-mail, senha, nome
+```
+
+O script é **idempotente** — se o usuário já existir, atualiza a senha e confirma o email. Se a pharmacy/profile já existir, só marca como platform admin. Pronto: logue em `/login` com as credenciais exibidas no fim.
+
+> **Por que rodar o script em vez de usar `/register`?** O fluxo de registro envia e-mail de confirmação, e o SMTP default do Supabase é instável. O script bypassa com `email_confirm=true`.
+
+---
+
+## Caminho manual (se preferir pela UI)
+
+Você pode pular este caminho todo se o script acima funcionou.
+
+### Pré-requisitos
 
 - [ ] Migrações aplicadas no Supabase (`20260421000001_platform_admins.sql` e `20260421000002_team_invitations.sql`).
 - [ ] Projeto rodando localmente ou deployado na Vercel.
 - [ ] Acesso ao Supabase Dashboard do projeto (SQL editor).
+- [ ] **Confirmação de email desativada** em Supabase Dashboard → Authentication → Providers → Email → desligue "Confirm email".
 
 ---
 
