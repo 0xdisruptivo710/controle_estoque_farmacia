@@ -52,11 +52,11 @@ CREATE POLICY "invitation_admin_manage" ON x3_invitations
   FOR ALL
   USING (
     (pharmacy_id = auth.pharmacy_id() AND auth.user_role() = 'admin')
-    OR auth.is_platform_admin()
+    OR public.is_platform_admin()
   )
   WITH CHECK (
     (pharmacy_id = auth.pharmacy_id() AND auth.user_role() = 'admin')
-    OR auth.is_platform_admin()
+    OR public.is_platform_admin()
   );
 
 -- ============================================================

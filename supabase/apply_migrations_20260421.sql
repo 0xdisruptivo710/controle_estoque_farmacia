@@ -59,8 +59,8 @@ CREATE TRIGGER trigger_sync_platform_admin_flag
   AFTER INSERT OR UPDATE OR DELETE ON x3_platform_admins
   FOR EACH ROW EXECUTE FUNCTION sync_platform_admin_flag();
 
--- 1.4 Função RLS helper
-CREATE OR REPLACE FUNCTION auth.is_platform_admin()
+-- 1.4 Função RLS helper (public schema — auth schema é restrito no SQL editor)
+CREATE OR REPLACE FUNCTION public.is_platform_admin()
 RETURNS BOOLEAN AS $$
   SELECT COALESCE(
     (SELECT is_platform_admin FROM x3_profiles
@@ -69,16 +69,18 @@ RETURNS BOOLEAN AS $$
   );
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
+GRANT EXECUTE ON FUNCTION public.is_platform_admin() TO authenticated, anon, service_role;
+
 -- 1.5 RLS na tabela x3_platform_admins
 ALTER TABLE x3_platform_admins ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "platform_admin_read" ON x3_platform_admins;
 CREATE POLICY "platform_admin_read" ON x3_platform_admins
-  FOR SELECT USING (auth.is_platform_admin());
+  FOR SELECT USING (public.is_platform_admin());
 
 DROP POLICY IF EXISTS "platform_admin_write" ON x3_platform_admins;
 CREATE POLICY "platform_admin_write" ON x3_platform_admins
-  FOR ALL USING (auth.is_platform_admin()) WITH CHECK (auth.is_platform_admin());
+  FOR ALL USING (public.is_platform_admin()) WITH CHECK (public.is_platform_admin());
 
 -- 1.6 Bypass de platform admin nas policies de tenant
 DO $$
@@ -93,8 +95,8 @@ BEGIN
     EXECUTE format('DROP POLICY IF EXISTS "pharmacy_isolation" ON %I', t);
     EXECUTE format(
       'CREATE POLICY "pharmacy_isolation" ON %I '
-      'FOR ALL USING (pharmacy_id = auth.pharmacy_id() OR auth.is_platform_admin()) '
-      'WITH CHECK (pharmacy_id = auth.pharmacy_id() OR auth.is_platform_admin())',
+      'FOR ALL USING (pharmacy_id = auth.pharmacy_id() OR public.is_platform_admin()) '
+      'WITH CHECK (pharmacy_id = auth.pharmacy_id() OR public.is_platform_admin())',
       t
     );
   END LOOP;
@@ -103,12 +105,12 @@ END $$;
 -- 1.7 pharmacies + x3_profiles — platform admin vê tudo
 DROP POLICY IF EXISTS "pharmacy_self_or_platform" ON pharmacies;
 CREATE POLICY "pharmacy_self_or_platform" ON pharmacies
-  FOR SELECT USING (id = auth.pharmacy_id() OR auth.is_platform_admin());
+  FOR SELECT USING (id = auth.pharmacy_id() OR public.is_platform_admin());
 
 DROP POLICY IF EXISTS "profile_visibility" ON x3_profiles;
 CREATE POLICY "profile_visibility" ON x3_profiles
   FOR SELECT USING (
-    id = auth.uid() OR pharmacy_id = auth.pharmacy_id() OR auth.is_platform_admin()
+    id = auth.uid() OR pharmacy_id = auth.pharmacy_id() OR public.is_platform_admin()
   );
 
 -- ==========================================================
@@ -159,11 +161,11 @@ CREATE POLICY "invitation_admin_manage" ON x3_invitations
   FOR ALL
   USING (
     (pharmacy_id = auth.pharmacy_id() AND auth.user_role() = 'admin')
-    OR auth.is_platform_admin()
+    OR public.is_platform_admin()
   )
   WITH CHECK (
     (pharmacy_id = auth.pharmacy_id() AND auth.user_role() = 'admin')
-    OR auth.is_platform_admin()
+    OR public.is_platform_admin()
   );
 
 -- ==========================================================

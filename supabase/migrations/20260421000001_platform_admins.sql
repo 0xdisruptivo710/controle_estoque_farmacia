@@ -72,8 +72,10 @@ CREATE TRIGGER trigger_sync_platform_admin_flag
 
 -- ============================================================
 -- 4. RLS helper — reads the flag, never the table (fast path)
+--    Lives in public (not auth) schema — SQL editor users lack
+--    permission to DDL on auth schema.
 -- ============================================================
-CREATE OR REPLACE FUNCTION auth.is_platform_admin()
+CREATE OR REPLACE FUNCTION public.is_platform_admin()
 RETURNS BOOLEAN AS $$
   SELECT COALESCE(
     (SELECT is_platform_admin
@@ -85,6 +87,8 @@ RETURNS BOOLEAN AS $$
   );
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
+GRANT EXECUTE ON FUNCTION public.is_platform_admin() TO authenticated, anon, service_role;
+
 -- ============================================================
 -- 5. RLS on x3_platform_admins itself
 --    Only platform admins may read or manage this table.
@@ -93,12 +97,12 @@ ALTER TABLE x3_platform_admins ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "platform_admin_read" ON x3_platform_admins;
 CREATE POLICY "platform_admin_read" ON x3_platform_admins
-  FOR SELECT USING (auth.is_platform_admin());
+  FOR SELECT USING (public.is_platform_admin());
 
 DROP POLICY IF EXISTS "platform_admin_write" ON x3_platform_admins;
 CREATE POLICY "platform_admin_write" ON x3_platform_admins
-  FOR ALL USING (auth.is_platform_admin())
-             WITH CHECK (auth.is_platform_admin());
+  FOR ALL USING (public.is_platform_admin())
+             WITH CHECK (public.is_platform_admin());
 
 -- ============================================================
 -- 6. Extend existing tenant-isolation policies
@@ -123,8 +127,8 @@ BEGIN
     EXECUTE format('DROP POLICY IF EXISTS "pharmacy_isolation" ON %I', t);
     EXECUTE format(
       'CREATE POLICY "pharmacy_isolation" ON %I '
-      'FOR ALL USING (pharmacy_id = auth.pharmacy_id() OR auth.is_platform_admin()) '
-      'WITH CHECK (pharmacy_id = auth.pharmacy_id() OR auth.is_platform_admin())',
+      'FOR ALL USING (pharmacy_id = auth.pharmacy_id() OR public.is_platform_admin()) '
+      'WITH CHECK (pharmacy_id = auth.pharmacy_id() OR public.is_platform_admin())',
       t
     );
   END LOOP;
@@ -133,7 +137,7 @@ END $$;
 -- pharmacies — platform admin sees all
 DROP POLICY IF EXISTS "pharmacy_self_or_platform" ON pharmacies;
 CREATE POLICY "pharmacy_self_or_platform" ON pharmacies
-  FOR SELECT USING (id = auth.pharmacy_id() OR auth.is_platform_admin());
+  FOR SELECT USING (id = auth.pharmacy_id() OR public.is_platform_admin());
 
 -- x3_profiles — platform admin sees all users across tenants
 DROP POLICY IF EXISTS "profile_visibility" ON x3_profiles;
@@ -141,7 +145,7 @@ CREATE POLICY "profile_visibility" ON x3_profiles
   FOR SELECT USING (
     id = auth.uid()
     OR pharmacy_id = auth.pharmacy_id()
-    OR auth.is_platform_admin()
+    OR public.is_platform_admin()
   );
 
 -- ============================================================
@@ -149,11 +153,11 @@ CREATE POLICY "profile_visibility" ON x3_profiles
 -- ============================================================
 -- DROP POLICY IF EXISTS "profile_visibility" ON x3_profiles;
 -- DROP POLICY IF EXISTS "pharmacy_self_or_platform" ON pharmacies;
--- (recreate original pharmacy_isolation policies without OR auth.is_platform_admin())
+-- (recreate original pharmacy_isolation policies without OR public.is_platform_admin())
 -- DROP POLICY IF EXISTS "platform_admin_read"  ON x3_platform_admins;
 -- DROP POLICY IF EXISTS "platform_admin_write" ON x3_platform_admins;
 -- DROP TRIGGER IF EXISTS trigger_sync_platform_admin_flag ON x3_platform_admins;
--- DROP FUNCTION IF EXISTS auth.is_platform_admin();
+-- DROP FUNCTION IF EXISTS public.is_platform_admin();
 -- DROP FUNCTION IF EXISTS sync_platform_admin_flag();
 -- ALTER TABLE x3_profiles DROP COLUMN IF EXISTS is_platform_admin;
 -- DROP TABLE IF EXISTS x3_platform_admins;
